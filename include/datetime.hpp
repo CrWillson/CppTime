@@ -27,6 +27,21 @@ class DateTime {
 public:
     std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<double>> tp;
 
+    struct DateTimeBreakdown {
+        const int year;               // Years since 0 B.C. [yrs]
+        const int month;              // The month [1 = Jan, 2 = Feb, ...]
+        const int day;                // Day of the month [days]
+        const int hour;               // Hour of the day [hr]
+        const int minute;             // Minutes [min]
+        const double second;          // Seconds and fraction of second [sec]
+        const int gps_wn;             // GPS week number [wks]
+        const double gps_sow;         // GPS seconds of week [sec]
+        const double gps_seconds;     // GPS seconds [sec]
+        const int doy;                // Day of the year [days]
+        const double doy_fractional;  // Day of the year plus fraction of day [days]
+        const double unix_timestamp;  // Unix timestamp [sec]
+    };
+
     DateTime(const Date& date, const Time& time) : tp(std::chrono::sys_days{date.ymd} + time.sec) {}
     DateTime(std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<double>> tp_) : tp(tp_) {}
 
@@ -35,10 +50,10 @@ public:
     }
 
     static DateTime from_bds_week_sow(int week, double sow) {
-        return DateTime{BDS_EPOCH + std::chrono::weeks{week} + std::chrono::duration<double>(sow) - BDS_GPS_OFFSET - GPS_UTC_LEAP};
+        return from_gps_week_sow(week + 1356, sow + 14);
     }
 
-    static DateTime from_year_doy_fractional(int year, double doy_frac) {
+    static DateTime from_year_doy(int year, double doy_frac) {
         auto base = std::chrono::sys_days{std::chrono::year{year}/1/1};
         int doy = static_cast<int>(floor(doy_frac));
         double frac_day = doy_frac - doy;
@@ -58,7 +73,7 @@ public:
     }
 
     static DateTime from_bds_seconds(double bds_sec) {
-        return DateTime{BDS_EPOCH + std::chrono::duration<double>(bds_sec) - BDS_GPS_OFFSET - GPS_UTC_LEAP};
+        return from_gps_seconds(bds_sec + 604800*1356+14);
     }
 
     friend bool operator==(const DateTime& a, const DateTime& b) { return a.tp == b.tp; }
@@ -117,6 +132,12 @@ public:
         return {d.year(), doy + frac_day};
     }
 
+    std::tuple<int, int> year_doy() const {
+        auto d = date();
+        int doy = (std::chrono::sys_days{d.ymd} - std::chrono::sys_days{d.ymd.year()/1/1}).count() + 1;
+        return {d.year(), doy};
+    }
+
     double julian_date() const {
         return JD_UNIX_EPOCH + duration_cast<std::chrono::duration<double>>(tp - UNIX_EPOCH).count() / 86400.0;
     }
@@ -138,6 +159,18 @@ public:
         return std::chrono::weekday{floor<std::chrono::days>(tp)}.iso_encoding();
     }
 
+    DateTimeBreakdown breakdown() const {
+        const auto [wn, sow] = gps_week_sow();
+        const auto [y, fdoy] = year_doy_fractional();
+        const auto [y2, doy] = year_doy();
+
+        return {
+            date().year(), date().month(), date().day(), time().hour(),
+            time().minute(), time().second(), wn, sow,
+            gps_seconds(), doy, fdoy, unix_timestamp()
+        };
+    }
+
     void print_all() const {
         fmt::println("========= DateTime Value =========");
         fmt::println("DateTime: {} {}", date(), time());
@@ -152,6 +185,7 @@ public:
         fmt::println("Day of Week: {}", day_of_week());
         fmt::println("==================================");
     }
+
 };
 
 }
@@ -164,3 +198,19 @@ struct fmt::formatter<TimeUtils::DateTime> : fmt::formatter<std::string> {
         return fmt::format_to(ctx.out(), "{} {}", d.date(), d.time());
     }
 };
+
+namespace std {
+    template <>
+    struct hash<TimeUtils::DateTime> {
+        std::size_t operator()(const TimeUtils::DateTime& dt) const {
+            std::size_t h1 = std::hash<double>{}(dt.tp.time_since_epoch().count());
+
+            // // Combine hashes manually
+            // std::size_t combined = h1;
+            // combined ^= h2 + 0x9e3779b9 + (combined << 6) + (combined >> 2);
+            // combined ^= h3 + 0x9e3779b9 + (combined << 6) + (combined >> 2);
+
+            return h1;
+        }
+    };
+}

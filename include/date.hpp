@@ -16,8 +16,8 @@ public:
     Date(std::chrono::sys_days days) : ymd{std::chrono::year_month_day{days}} {}
 
     int year() const { return int(ymd.year()); }
-    unsigned month() const { return unsigned(ymd.month()); }
-    unsigned day() const { return unsigned(ymd.day()); }
+    int month() const { return unsigned(ymd.month()); }
+    int day() const { return unsigned(ymd.day()); }
 
     void set_year(int y) { ymd = std::chrono::year{y}/ymd.month()/ymd.day(); }
     void set_month(unsigned m) { ymd = ymd.year()/std::chrono::month{m}/ymd.day(); }

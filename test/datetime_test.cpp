@@ -1,4 +1,3 @@
-#include <chrono>
 #include <fmt/core.h>
 
 #include <gtest/gtest.h>
@@ -41,6 +40,26 @@ TEST(DateTime, increment_time)
     ASSERT_EQ(dt.nanosecond(), 789);
 }
 
+TEST(DateTime, Year_Doy_to_GPS)
+{
+    const int YEAR = 2025;
+    const double DOY = 195.75;
+
+    DateTime dt = DateTime::from_year_doy(YEAR, DOY);
+
+    auto [week, sow] = dt.gps_week_sow();
+
+    ASSERT_EQ(week, 2375);
+    ASSERT_EQ(sow, 151218);
+
+    DateTime dt2 = DateTime::from_gps_week_sow(week, sow);
+
+    auto [year, doy] = dt2.year_doy();
+
+    ASSERT_EQ(year, YEAR);
+    ASSERT_NEAR(doy, DOY, 1e-6);
+}
+
 TEST(DateTime, GPS_SOW_Conversion)
 {
     DateTime dt{2025, 2, 7, 11, 30, 45};
@@ -53,9 +72,9 @@ TEST(DateTime, GPS_SOW_Conversion)
     DateTime dt2 = DateTime::from_gps_week_sow(week, sow);
 
     auto diff = (dt.tp - dt2.tp).count();
-    fmt::println("GPS SOW Conversion Diff: {} sec", diff);
+    fmt::println("GPS SOW Conversion Diff: {} ns", diff);
 
-    ASSERT_LT(diff, 5e-6);
+    ASSERT_LE(diff, 1);
 }
 
 TEST(DateTime, GPS_Seconds_Conversion)
@@ -66,9 +85,9 @@ TEST(DateTime, GPS_Seconds_Conversion)
     DateTime dt2 = DateTime::from_gps_seconds(seconds);
 
     auto diff = (dt.tp - dt2.tp).count();
-    fmt::println("GPS Seconds Conversion Diff: {} sec", diff);
+    fmt::println("GPS Seconds Conversion Diff: {} ns", diff);
 
-    ASSERT_LT(diff, 5e-6);
+    ASSERT_LE(diff, 1);
 }
 
 TEST(DateTime, BDS_SOW_Conversion)
@@ -79,9 +98,9 @@ TEST(DateTime, BDS_SOW_Conversion)
     DateTime dt2 = DateTime::from_bds_week_sow(week, sow);
 
     auto diff = (dt.tp - dt2.tp).count();
-    fmt::println("BDS SOW Conversion Diff: {} sec", diff);
+    fmt::println("BDS SOW Conversion Diff: {} ns", diff);
 
-    ASSERT_LT(diff, 5e-6);
+    ASSERT_LE(diff, 1);
 }
 
 TEST(DateTime, BDS_Seconds_Conversion)
@@ -92,22 +111,22 @@ TEST(DateTime, BDS_Seconds_Conversion)
     DateTime dt2 = DateTime::from_bds_seconds(seconds);
 
     auto diff = (dt.tp - dt2.tp).count();
-    fmt::println("BDS Seconds Conversion Diff: {} sec", diff);
+    fmt::println("BDS Seconds Conversion Diff: {} ns", diff);
 
-    ASSERT_LT(diff, 5e-6);
+    ASSERT_LE(diff, 1);
 }
 
 TEST(DateTime, Year_Doy_Conversion)
 {
     DateTime dt{2025, 2, 7, 11, 30, 45};
 
-    auto [year, doy] = dt.year_doy_fractional();
+    auto [year, doy] = dt.year_doy();
     DateTime dt2 = DateTime::from_year_doy(year, doy);
 
     auto diff = (dt.tp - dt2.tp).count();
-    fmt::println("Year_Doy Conversion Diff: {} sec", diff);
+    fmt::println("Year_Doy Conversion Diff: {} ns", diff);
 
-    ASSERT_LT(diff, 5e-6);
+    ASSERT_LE(diff, 1);
 }
 
 TEST(DateTime, Unix_Timestamp_Conversion)
@@ -118,9 +137,9 @@ TEST(DateTime, Unix_Timestamp_Conversion)
     DateTime dt2 = DateTime::from_unix_timestamp(seconds);
 
     auto diff = (dt.tp - dt2.tp).count();
-    fmt::println("Unix Conversion Diff: {} sec", diff);
+    fmt::println("Unix Conversion Diff: {} ns", diff);
 
-    ASSERT_LT(diff, 5e-6);
+    ASSERT_LE(diff, 1);
 }
 
 
@@ -133,7 +152,7 @@ TEST(DateTime, Julian_Date_Conversion)
     auto days2 = dt2.julian_date();
 
     auto diff = (dt.tp - dt2.tp).count();
-    fmt::println("Julian Conversion Diff: {} sec", diff);
+    fmt::println("Julian Conversion Diff: {} ns", diff);
 
-    ASSERT_LT(diff, 2e-5);
+    ASSERT_LE(diff, 20000);
 }

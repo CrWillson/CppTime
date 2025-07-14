@@ -54,9 +54,9 @@ public:
     static DateTime from_julian_date(double jd) {
         using namespace std::chrono;
 
-        double days_since_unix = jd - JD_UNIX_EPOCH;
+        double sec_since_unix = (jd - JD_UNIX_EPOCH) * 86400.0;
 
-        auto dur = duration_cast<nanoseconds>(duration<double>{days_since_unix * 86400.0});
+        auto dur = duration_cast<nanoseconds>(duration<double>{sec_since_unix});
         return DateTime(time_point{dur});
     }
 
@@ -198,7 +198,7 @@ public:
         return 604800*weeks + sow;
     }
 
-    std::pair<int, double> year_doy_fractional() const {
+    std::pair<int, double> year_doy() const {
         using namespace std::chrono;
 
         auto ymd = get_ymd();
@@ -230,7 +230,7 @@ public:
         fmt::println("GPS Seconds: {}", gps_seconds());
         fmt::println("BDS Week and Sec: {}", bds_week_sow());
         fmt::println("BDS Seconds: {}", bds_seconds());
-        fmt::println("Year and Doy: {}", year_doy_fractional());
+        fmt::println("Year and Doy: {}", year_doy());
         fmt::println("Julian Date: {}", julian_date());
         fmt::println("Unix Timestamp: {}", unix_timestamp());
         fmt::println("Day of Week: {}", day_of_week());

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <chrono>
-#include <string>
 #include <fmt/core.h>
 #include <fmt/chrono.h>
 #include <fmt/ranges.h>
@@ -9,71 +8,56 @@
 #include <cmath>
 #include <tuple>
 
-#include "time.hpp"
-#include "date.hpp"
-
 namespace TimeUtils {
     
 // Clock epochs
-constexpr auto GPS_EPOCH = std::chrono::sys_days{std::chrono::year{1980}/1/6};
-constexpr auto BDS_EPOCH = std::chrono::sys_days{std::chrono::year{2006}/1/1};
-constexpr auto UNIX_EPOCH = std::chrono::sys_days{std::chrono::year{1970}/1/1};
+constexpr auto GPS_EPOCH = std::chrono::sys_days{std::chrono::January/6/1980};
+constexpr auto BDS_EPOCH = std::chrono::sys_days{std::chrono::January/1/2006};
+constexpr auto UNIX_EPOCH = std::chrono::sys_days{std::chrono::January/1/1970};
 constexpr auto JD_UNIX_EPOCH = 2440587.5; // Julian date of 1970-01-01 00:00:00 UTC
 
-constexpr std::chrono::seconds GPS_UTC_LEAP = std::chrono::seconds{18};
-constexpr std::chrono::seconds BDS_GPS_OFFSET = std::chrono::seconds{14};
+constexpr auto GPS_UTC_LEAP = std::chrono::seconds{18};
+constexpr auto BDS_UTC_LEAP = std::chrono::seconds{4};
+constexpr auto BDS_GPS_WEEKS = std::chrono::weeks{1356};
+constexpr auto BDS_GPS_SEC = GPS_UTC_LEAP - BDS_UTC_LEAP;
+
 
 class DateTime {
 public:
-    std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<double>> tp;
+    using time_point = std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds>;
+    time_point tp;
 
-    struct DateTimeBreakdown {
-        const int year;               // Years since 0 B.C. [yrs]
-        const int month;              // The month [1 = Jan, 2 = Feb, ...]
-        const int day;                // Day of the month [days]
-        const int hour;               // Hour of the day [hr]
-        const int minute;             // Minutes [min]
-        const double second;          // Seconds and fraction of second [sec]
-        const int gps_wn;             // GPS week number [wks]
-        const double gps_sow;         // GPS seconds of week [sec]
-        const double gps_seconds;     // GPS seconds [sec]
-        const int doy;                // Day of the year [days]
-        const double doy_fractional;  // Day of the year plus fraction of day [days]
-        const double unix_timestamp;  // Unix timestamp [sec]
-    };
+    DateTime(time_point tp_) : tp(tp_) {}
+    DateTime(int year, int month, int day, int hour, int minute, int second,
+             int millisecond = 0, int microsecond = 0, int nanosecond = 0);
 
-    DateTime(const Date& date, const Time& time) : tp(std::chrono::sys_days{date.ymd} + time.sec) {}
-    DateTime(std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<double>> tp_) : tp(tp_) {}
+    static DateTime from_gps_seconds(double gps_sec);
+
+    static DateTime from_bds_seconds(double bds_sec) {
+        return from_gps_seconds(bds_sec + 604800.0*BDS_GPS_WEEKS.count()+BDS_GPS_SEC.count());
+    }
 
     static DateTime from_gps_week_sow(int week, double sow) {
-        return DateTime{GPS_EPOCH + std::chrono::weeks{week} + std::chrono::duration<double>(sow) - GPS_UTC_LEAP};
+        return from_gps_seconds(week*604800.0 + sow);
     }
 
     static DateTime from_bds_week_sow(int week, double sow) {
-        return from_gps_week_sow(week + 1356, sow + 14);
+        return from_gps_week_sow(week + BDS_GPS_WEEKS.count(), sow + BDS_GPS_SEC.count());
     }
 
-    static DateTime from_year_doy(int year, double doy_frac) {
-        auto base = std::chrono::sys_days{std::chrono::year{year}/1/1};
-        int doy = static_cast<int>(floor(doy_frac));
-        double frac_day = doy_frac - doy;
-        return DateTime{base + std::chrono::days{doy - 1} + std::chrono::duration<double>(frac_day * 86400.0)};
-    }
+    static DateTime from_year_doy(int year, double doy_frac);
 
-    static DateTime from_unix_timestamp(double timestamp) {
-        return DateTime{UNIX_EPOCH + std::chrono::duration<double>(timestamp)};
+    static DateTime from_unix_timestamp(double unix_ts) {
+        return DateTime(time_point{duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>{unix_ts})});
     }
 
     static DateTime from_julian_date(double jd) {
-        return DateTime{UNIX_EPOCH + std::chrono::duration<double>((jd - JD_UNIX_EPOCH) * 86400.0)};
-    }
+        using namespace std::chrono;
 
-    static DateTime from_gps_seconds(double gps_sec) {
-        return DateTime{GPS_EPOCH + std::chrono::duration<double>(gps_sec) - GPS_UTC_LEAP};
-    }
+        double days_since_unix = jd - JD_UNIX_EPOCH;
 
-    static DateTime from_bds_seconds(double bds_sec) {
-        return from_gps_seconds(bds_sec + 604800*1356+14);
+        auto dur = duration_cast<nanoseconds>(duration<double>{days_since_unix * 86400.0});
+        return DateTime(time_point{dur});
     }
 
     friend bool operator==(const DateTime& a, const DateTime& b) { return a.tp == b.tp; }
@@ -90,27 +74,116 @@ public:
 
     friend fmt::formatter<DateTime>;
 
-    Date date() const { return Date{floor<std::chrono::days>(tp)}; }
-    Time time() const { return Time{std::chrono::duration<double>(tp - floor<std::chrono::days>(tp))}; }
+    auto get_ymd() const {
+        return std::chrono::year_month_day(std::chrono::floor<std::chrono::days>(tp));
+    }
+    auto get_tod() const {
+        return tp - std::chrono::floor<std::chrono::days>(tp);
+    }
+    auto get_hms() const {
+        return std::chrono::hh_mm_ss<std::chrono::nanoseconds>{get_tod()};
+    }
 
-    void set_year(int y) { auto d = date(); d.set_year(y); tp = std::chrono::sys_days{d.ymd} + time().sec; }
-    void set_month(unsigned m) { auto d = date(); d.set_month(m); tp = std::chrono::sys_days{d.ymd} + time().sec; }
-    void set_day(unsigned d_) { auto d = date(); d.set_day(d_); tp = std::chrono::sys_days{d.ymd} + time().sec; }
-    void set_hour(int h) { auto t = time(); t.set_hour(h); tp = std::chrono::sys_days{date().ymd} + t.sec; }
-    void set_minute(int m) { auto t = time(); t.set_minute(m); tp = std::chrono::sys_days{date().ymd} + t.sec; }
-    void set_second(double s) { auto t = time(); t.set_second(s); tp = std::chrono::sys_days{date().ymd} + t.sec; }
+    int year() const { return (int)get_ymd().year(); }
+    int month() const { return (unsigned)get_ymd().month(); }
+    int day() const { return (unsigned)get_ymd().day(); }
+    int hour() const { return get_hms().hours().count(); }
+    int minute() const { return get_hms().minutes().count(); }
+    int second() const { return get_hms().seconds().count(); }
+    int millisecond() const { return get_hms().subseconds().count() / 1000000; }
+    int microsecond() const { return (get_hms().subseconds().count() / 1000) % 1000; }
+    int nanosecond() const { return get_hms().subseconds().count() % 1000; }
 
-    std::tuple<int, double> gps_week_sow() const {
-        auto gps_tp = tp + GPS_UTC_LEAP;
-        auto since_epoch = gps_tp - GPS_EPOCH;
-        int week = std::chrono::duration_cast<std::chrono::weeks>(since_epoch).count();
-        double sow = std::chrono::duration_cast<std::chrono::duration<double>>(since_epoch - std::chrono::weeks{week}).count();
+    void set_year(int year) {
+        tp = std::chrono::sys_days{std::chrono::year{year} / get_ymd().month() / get_ymd().day()} + get_tod();
+    }
+    void set_month(int month) {
+        unsigned mon = static_cast<unsigned>(month);
+        tp = std::chrono::sys_days{get_ymd().year() / std::chrono::month{mon} / get_ymd().day()} + get_tod();
+    }
+    void set_day(int day) {
+        unsigned d = static_cast<unsigned>(day);
+        tp = std::chrono::sys_days{get_ymd().year() / get_ymd().month() / std::chrono::day{d}} + get_tod();
+    }
+    void set_hour(int hour) {
+        auto day = std::chrono::floor<std::chrono::days>(tp);
+        tp = day + std::chrono::hours{hour} + std::chrono::minutes{get_hms().minutes()}
+                + std::chrono::seconds{get_hms().seconds()} + get_hms().subseconds();
+    }
+    void set_minute(int minute) {
+        auto day = std::chrono::floor<std::chrono::days>(tp);
+        tp = day + std::chrono::hours{get_hms().hours()} + std::chrono::minutes{minute}
+            + std::chrono::seconds{get_hms().seconds()} + get_hms().subseconds();
+    }
+    void set_second(int second) {
+        auto day = std::chrono::floor<std::chrono::days>(tp);
+        tp = day + std::chrono::hours{get_hms().hours()} + std::chrono::minutes{get_hms().minutes()}
+            + std::chrono::seconds{second} + get_hms().subseconds();
+    }
+
+    void set_millisecond(int millisecond) {
+        auto day = std::chrono::floor<std::chrono::days>(tp);
+        auto tod = std::chrono::hh_mm_ss<std::chrono::nanoseconds>{tp - day};
+        auto ns = std::chrono::nanoseconds{
+            (tod.subseconds().count() % 1'000'000) + millisecond * 1'000'000
+        };
+        tp = day + std::chrono::hours{tod.hours()}
+                + std::chrono::minutes{tod.minutes()}
+                + std::chrono::seconds{tod.seconds()}
+                + ns;
+    }
+
+    void set_microsecond(int microsecond) {
+        auto day = std::chrono::floor<std::chrono::days>(tp);
+        auto tod = std::chrono::hh_mm_ss<std::chrono::nanoseconds>{tp - day};
+        auto ns = std::chrono::nanoseconds{
+            (tod.subseconds().count() % 1'000) +
+            (tod.subseconds().count() / 1'000'000 * 1'000'000) +  // keep ms
+            microsecond * 1'000
+        };
+        tp = day + std::chrono::hours{tod.hours()}
+                + std::chrono::minutes{tod.minutes()}
+                + std::chrono::seconds{tod.seconds()}
+                + ns;
+    }
+
+    void set_nanosecond(int nanosecond) {
+        auto day = std::chrono::floor<std::chrono::days>(tp);
+        auto tod = std::chrono::hh_mm_ss<std::chrono::nanoseconds>{tp - day};
+        auto ns = std::chrono::nanoseconds{
+            (tod.subseconds().count() / 1'000 * 1'000) + nanosecond
+        };
+        tp = day + std::chrono::hours{tod.hours()}
+                + std::chrono::minutes{tod.minutes()}
+                + std::chrono::seconds{tod.seconds()}
+                + ns;
+    }
+
+    void add_year(int y) { set_year(year() + y); }
+    void add_month(int m) { set_month(month() + m); }
+    void add_day(int d) { set_day(day() + d); }
+    void add_hour(int h) { set_hour(hour() + h); }
+    void add_minute(int m) { set_minute(minute() + m); }
+    void add_second(int s) { set_second(second() + s); }
+    void add_millisecond(int ms) { set_millisecond(millisecond() + ms); }
+    void add_microsecond(int us) { set_microsecond(microsecond() + us); }
+    void add_nanosecond(int ns) { set_nanosecond(nanosecond() + ns); }
+
+    
+    std::pair<int, double> gps_week_sow() const {
+        auto tot_sec = gps_seconds();
+        int week = static_cast<int>(tot_sec / (7*86400));
+        double sow = tot_sec - week*7*86400;
+
         return {week, sow};
     }
 
     double gps_seconds() const {
-        auto [weeks, sow] = gps_week_sow();
-        return 604800*weeks + sow;
+        using namespace std::chrono;
+
+        auto duration = tp - time_point_cast<nanoseconds>(GPS_EPOCH);
+        int64_t total_ns = duration_cast<nanoseconds>(duration).count();
+        return static_cast<double>(total_ns) / 1000000000.0 + GPS_UTC_LEAP.count();
     }
 
     std::tuple<int, double> bds_week_sow() const {
@@ -125,55 +198,34 @@ public:
         return 604800*weeks + sow;
     }
 
-    std::tuple<int, double> year_doy_fractional() const {
-        auto d = date();
-        int doy = (std::chrono::sys_days{d.ymd} - std::chrono::sys_days{d.ymd.year()/1/1}).count() + 1;
-        double frac_day = time().sec.count() / 86400.0;
-        return {d.year(), doy + frac_day};
-    }
+    std::pair<int, double> year_doy_fractional() const {
+        using namespace std::chrono;
 
-    std::tuple<int, int> year_doy() const {
-        auto d = date();
-        int doy = (std::chrono::sys_days{d.ymd} - std::chrono::sys_days{d.ymd.year()/1/1}).count() + 1;
-        return {d.year(), doy};
+        auto ymd = get_ymd();
+        auto y = ymd.year();
+
+        int doy = duration_cast<days>(floor<days>(tp) - sys_days{y/1/1}).count() + 1;
+        auto sec = duration_cast<duration<double>>(tp - floor<days>(tp)).count() / 86400.0;
+
+        return {(int)y, doy + sec};
+
     }
 
     double julian_date() const {
-        return JD_UNIX_EPOCH + duration_cast<std::chrono::duration<double>>(tp - UNIX_EPOCH).count() / 86400.0;
+        return JD_UNIX_EPOCH + duration_cast<std::chrono::duration<double>>(tp.time_since_epoch()).count() / 86400.0;
     }
 
     double unix_timestamp() const {
-        return duration_cast<std::chrono::duration<double>>(tp - UNIX_EPOCH).count();
-    }
-
-    unsigned week_of_year() const {
-        auto d = date();
-        auto first_day = std::chrono::sys_days{d.ymd.year()/1/1};
-        auto weekday_first = std::chrono::weekday{first_day}.c_encoding();
-        auto weekday_current = std::chrono::weekday{std::chrono::sys_days{d.ymd}}.c_encoding();
-        auto doy = (std::chrono::sys_days{d.ymd} - first_day).count();
-        return (doy + weekday_first) / 7 + 1;
+        return duration_cast<std::chrono::duration<double>>(tp.time_since_epoch()).count();
     }
 
     unsigned day_of_week() const {
         return std::chrono::weekday{floor<std::chrono::days>(tp)}.iso_encoding();
     }
 
-    DateTimeBreakdown breakdown() const {
-        const auto [wn, sow] = gps_week_sow();
-        const auto [y, fdoy] = year_doy_fractional();
-        const auto [y2, doy] = year_doy();
-
-        return {
-            date().year(), date().month(), date().day(), time().hour(),
-            time().minute(), time().second(), wn, sow,
-            gps_seconds(), doy, fdoy, unix_timestamp()
-        };
-    }
-
     void print_all() const {
         fmt::println("========= DateTime Value =========");
-        fmt::println("DateTime: {} {}", date(), time());
+        fmt::println("DateTime: {}-{}-{} {}:{}:{}.{},{},{}", year(), month(), day(), hour(), minute(), second(), millisecond(), microsecond(), nanosecond());
         fmt::println("GPS Week and Sec: {}", gps_week_sow());
         fmt::println("GPS Seconds: {}", gps_seconds());
         fmt::println("BDS Week and Sec: {}", bds_week_sow());
@@ -181,9 +233,42 @@ public:
         fmt::println("Year and Doy: {}", year_doy_fractional());
         fmt::println("Julian Date: {}", julian_date());
         fmt::println("Unix Timestamp: {}", unix_timestamp());
-        fmt::println("Week of Year: {}", week_of_year());
         fmt::println("Day of Week: {}", day_of_week());
         fmt::println("==================================");
+    }
+
+private:
+    // void adjust_timesys(time_point& tp, TSYS ts)
+    // {
+    //     switch (ts) {
+    //         case TSYS::UTC:
+    //             break;
+    //         case TSYS::GPS:
+    //             tp -= GPS_UTC_LEAP;
+    //             break;
+    //         case TSYS::BDS:
+    //             tp -= BDS_UTC_LEAP;
+    //             break;
+    //     }
+    // }
+
+    static void split_seconds(double tot_sec, int& sec, int& ms, int& us, int& ns)
+    {
+        sec = static_cast<int>(tot_sec);
+        double frac = tot_sec - sec;
+
+        ms = static_cast<int>(frac * 1'000);
+        frac -= ms / 1'000.0;
+
+        us = static_cast<int>(frac * 1'000'000);
+        frac -= us / 1'000'000.0;
+
+        ns = static_cast<int>(frac * 1'000'000'000);
+    }
+
+    static double merge_seconds(const int sec, const int ms, const int us, const int ns)
+    {
+        return sec + (ms / 1000.0) + (us / 1000000.0) + (ns / 1000000000.0);
     }
 
 };
@@ -195,7 +280,8 @@ template <>
 struct fmt::formatter<TimeUtils::DateTime> : fmt::formatter<std::string> {
     template <typename FormatContext>
     auto format(const TimeUtils::DateTime& d, FormatContext& ctx) const {
-        return fmt::format_to(ctx.out(), "{} {}", d.date(), d.time());
+        return fmt::format_to(ctx.out(), "{}-{}-{} {}:{}:{}.{},{},{}", d.year(), d.month(), d.day(), 
+            d.hour(), d.minute(), d.second(), d.millisecond(), d.microsecond(), d.nanosecond());
     }
 };
 

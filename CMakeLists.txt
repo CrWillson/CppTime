@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 project(cpp_time)
 set(PROJECT_NAMESPACE Utilities)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
@@ -21,8 +21,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-file(GLOB SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
-add_library(${PROJECT_NAME}_lib ${SOURCES})
+add_library(${PROJECT_NAME}_lib
+    src/datetime.cpp
+)
 add_library(${PROJECT_NAMESPACE}::${PROJECT_NAME} ALIAS ${PROJECT_NAME}_lib)
 
 target_include_directories(${PROJECT_NAME}_lib PUBLIC include)

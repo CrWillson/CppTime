@@ -2,55 +2,54 @@
 #include <fmt/core.h>
 
 #include <gtest/gtest.h>
-
-#include "date.hpp"
-#include "time.hpp"
 #include "datetime.hpp"
-#include "datetime_operators.hpp"
+
 
 using namespace TimeUtils;
 
-Date d{2025, 2, 7};
-Time t(11, 30, 45);
-
-
-TEST(DateTime, construction)
-{
-    DateTime dt = d + t;
-
-    dt.print_all();
-}
-
 TEST(DateTime, increment_time)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45, 123, 456, 789};
 
     fmt::println("DateTime: {}", dt);
 
-    ASSERT_EQ(dt.time().hour(), 11);
-    ASSERT_EQ(dt.time().minute(), 30);
-    ASSERT_EQ(dt.time().second(), 45);
+    ASSERT_EQ(dt.year(), 2025);
+    ASSERT_EQ(dt.month(), 2);
+    ASSERT_EQ(dt.day(), 7);
+    ASSERT_EQ(dt.hour(), 11);
+    ASSERT_EQ(dt.minute(), 30);
+    ASSERT_EQ(dt.second(), 45);
+    ASSERT_EQ(dt.millisecond(), 123);
+    ASSERT_EQ(dt.microsecond(), 456);
+    ASSERT_EQ(dt.nanosecond(), 789);
 
-    Time t{3, 35, 40};
-    dt += t;
+    dt.add_day(1);
+    dt.add_minute(45);
+    dt.add_second(10);
+    dt.add_microsecond(123);
 
     fmt::println("DateTime: {}", dt);
 
-    ASSERT_EQ(dt.time().hour(), 15);
-    ASSERT_EQ(dt.time().minute(), 6);
-    ASSERT_EQ(dt.time().second(), 25);
-
-    Time t2{10, 56, 17};
-    dt += t2;
-
-    fmt::println("DateTime: {}", dt);
+    ASSERT_EQ(dt.year(), 2025);
+    ASSERT_EQ(dt.month(), 2);
+    ASSERT_EQ(dt.day(), 8);
+    ASSERT_EQ(dt.hour(), 12);
+    ASSERT_EQ(dt.minute(), 15);
+    ASSERT_EQ(dt.second(), 55);
+    ASSERT_EQ(dt.millisecond(), 123);
+    ASSERT_EQ(dt.microsecond(), 579);
+    ASSERT_EQ(dt.nanosecond(), 789);
 }
 
 TEST(DateTime, GPS_SOW_Conversion)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45};
 
     auto [week, sow] = dt.gps_week_sow();
+
+    ASSERT_EQ(week, 2352);
+    ASSERT_NEAR(sow, 473463, 1e-6);
+
     DateTime dt2 = DateTime::from_gps_week_sow(week, sow);
 
     auto diff = (dt.tp - dt2.tp).count();
@@ -61,7 +60,7 @@ TEST(DateTime, GPS_SOW_Conversion)
 
 TEST(DateTime, GPS_Seconds_Conversion)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45};
 
     auto seconds = dt.gps_seconds();
     DateTime dt2 = DateTime::from_gps_seconds(seconds);
@@ -74,7 +73,7 @@ TEST(DateTime, GPS_Seconds_Conversion)
 
 TEST(DateTime, BDS_SOW_Conversion)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45};
 
     auto [week, sow] = dt.bds_week_sow();
     DateTime dt2 = DateTime::from_bds_week_sow(week, sow);
@@ -87,7 +86,7 @@ TEST(DateTime, BDS_SOW_Conversion)
 
 TEST(DateTime, BDS_Seconds_Conversion)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45};
 
     auto seconds = dt.bds_seconds();
     DateTime dt2 = DateTime::from_bds_seconds(seconds);
@@ -100,7 +99,7 @@ TEST(DateTime, BDS_Seconds_Conversion)
 
 TEST(DateTime, Year_Doy_Conversion)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45};
 
     auto [year, doy] = dt.year_doy_fractional();
     DateTime dt2 = DateTime::from_year_doy(year, doy);
@@ -113,7 +112,7 @@ TEST(DateTime, Year_Doy_Conversion)
 
 TEST(DateTime, Unix_Timestamp_Conversion)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45};
 
     auto seconds = dt.unix_timestamp();
     DateTime dt2 = DateTime::from_unix_timestamp(seconds);
@@ -127,7 +126,7 @@ TEST(DateTime, Unix_Timestamp_Conversion)
 
 TEST(DateTime, Julian_Date_Conversion)
 {
-    DateTime dt = d + t;
+    DateTime dt{2025, 2, 7, 11, 30, 45};
 
     auto days = dt.julian_date();
     DateTime dt2 = DateTime::from_julian_date(days);

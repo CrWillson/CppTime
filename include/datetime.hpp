@@ -24,41 +24,20 @@ constexpr auto BDS_GPS_SEC = GPS_UTC_LEAP - BDS_UTC_LEAP;
 
 class DateTime {
 public:
-    using time_point = std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds>;
-    time_point tp;
+    using time_point_ns = std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds>;
+    time_point_ns tp;
 
-    DateTime(time_point tp_) : tp(tp_) {}
+    DateTime(time_point_ns tp_) : tp(tp_) {}
     DateTime(int year, int month, int day, int hour, int minute, int second,
              int millisecond = 0, int microsecond = 0, int nanosecond = 0);
 
     static DateTime from_gps_seconds(double gps_sec);
-
-    static DateTime from_bds_seconds(double bds_sec) {
-        return from_gps_seconds(bds_sec + 604800.0*BDS_GPS_WEEKS.count()+BDS_GPS_SEC.count());
-    }
-
-    static DateTime from_gps_week_sow(int week, double sow) {
-        return from_gps_seconds(week*604800.0 + sow);
-    }
-
-    static DateTime from_bds_week_sow(int week, double sow) {
-        return from_gps_week_sow(week + BDS_GPS_WEEKS.count(), sow + BDS_GPS_SEC.count());
-    }
-
+    static DateTime from_bds_seconds(double bds_sec);
+    static DateTime from_gps_week_sow(int week, double sow);
+    static DateTime from_bds_week_sow(int week, double sow);
     static DateTime from_year_doy(int year, double doy_frac);
-
-    static DateTime from_unix_timestamp(double unix_ts) {
-        return DateTime(time_point{duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>{unix_ts})});
-    }
-
-    static DateTime from_julian_date(double jd) {
-        using namespace std::chrono;
-
-        double sec_since_unix = (jd - JD_UNIX_EPOCH) * 86400.0;
-
-        auto dur = duration_cast<nanoseconds>(duration<double>{sec_since_unix});
-        return DateTime(time_point{dur});
-    }
+    static DateTime from_unix_timestamp(double unix_ts);
+    static DateTime from_julian_date(double jd);
 
     friend bool operator==(const DateTime& a, const DateTime& b) { return a.tp == b.tp; }
     friend bool operator!=(const DateTime& a, const DateTime& b) { return !(a == b); }
@@ -94,70 +73,15 @@ public:
     int microsecond() const { return (get_hms().subseconds().count() / 1000) % 1000; }
     int nanosecond() const { return get_hms().subseconds().count() % 1000; }
 
-    void set_year(int year) {
-        tp = std::chrono::sys_days{std::chrono::year{year} / get_ymd().month() / get_ymd().day()} + get_tod();
-    }
-    void set_month(int month) {
-        unsigned mon = static_cast<unsigned>(month);
-        tp = std::chrono::sys_days{get_ymd().year() / std::chrono::month{mon} / get_ymd().day()} + get_tod();
-    }
-    void set_day(int day) {
-        unsigned d = static_cast<unsigned>(day);
-        tp = std::chrono::sys_days{get_ymd().year() / get_ymd().month() / std::chrono::day{d}} + get_tod();
-    }
-    void set_hour(int hour) {
-        auto day = std::chrono::floor<std::chrono::days>(tp);
-        tp = day + std::chrono::hours{hour} + std::chrono::minutes{get_hms().minutes()}
-                + std::chrono::seconds{get_hms().seconds()} + get_hms().subseconds();
-    }
-    void set_minute(int minute) {
-        auto day = std::chrono::floor<std::chrono::days>(tp);
-        tp = day + std::chrono::hours{get_hms().hours()} + std::chrono::minutes{minute}
-            + std::chrono::seconds{get_hms().seconds()} + get_hms().subseconds();
-    }
-    void set_second(int second) {
-        auto day = std::chrono::floor<std::chrono::days>(tp);
-        tp = day + std::chrono::hours{get_hms().hours()} + std::chrono::minutes{get_hms().minutes()}
-            + std::chrono::seconds{second} + get_hms().subseconds();
-    }
-
-    void set_millisecond(int millisecond) {
-        auto day = std::chrono::floor<std::chrono::days>(tp);
-        auto tod = std::chrono::hh_mm_ss<std::chrono::nanoseconds>{tp - day};
-        auto ns = std::chrono::nanoseconds{
-            (tod.subseconds().count() % 1'000'000) + millisecond * 1'000'000
-        };
-        tp = day + std::chrono::hours{tod.hours()}
-                + std::chrono::minutes{tod.minutes()}
-                + std::chrono::seconds{tod.seconds()}
-                + ns;
-    }
-
-    void set_microsecond(int microsecond) {
-        auto day = std::chrono::floor<std::chrono::days>(tp);
-        auto tod = std::chrono::hh_mm_ss<std::chrono::nanoseconds>{tp - day};
-        auto ns = std::chrono::nanoseconds{
-            (tod.subseconds().count() % 1'000) +
-            (tod.subseconds().count() / 1'000'000 * 1'000'000) +  // keep ms
-            microsecond * 1'000
-        };
-        tp = day + std::chrono::hours{tod.hours()}
-                + std::chrono::minutes{tod.minutes()}
-                + std::chrono::seconds{tod.seconds()}
-                + ns;
-    }
-
-    void set_nanosecond(int nanosecond) {
-        auto day = std::chrono::floor<std::chrono::days>(tp);
-        auto tod = std::chrono::hh_mm_ss<std::chrono::nanoseconds>{tp - day};
-        auto ns = std::chrono::nanoseconds{
-            (tod.subseconds().count() / 1'000 * 1'000) + nanosecond
-        };
-        tp = day + std::chrono::hours{tod.hours()}
-                + std::chrono::minutes{tod.minutes()}
-                + std::chrono::seconds{tod.seconds()}
-                + ns;
-    }
+    void set_year(int year);
+    void set_month(int month);
+    void set_day(int day);
+    void set_hour(int hour);
+    void set_minute(int minute);
+    void set_second(int second);
+    void set_millisecond(int millisecond);
+    void set_microsecond(int microsecond);
+    void set_nanosecond(int nanosecond);
 
     void add_year(int y) { set_year(year() + y); }
     void add_month(int m) { set_month(month() + m); }
@@ -238,22 +162,9 @@ public:
     }
 
 private:
-    // void adjust_timesys(time_point& tp, TSYS ts)
-    // {
-    //     switch (ts) {
-    //         case TSYS::UTC:
-    //             break;
-    //         case TSYS::GPS:
-    //             tp -= GPS_UTC_LEAP;
-    //             break;
-    //         case TSYS::BDS:
-    //             tp -= BDS_UTC_LEAP;
-    //             break;
-    //     }
-    // }
-
-    static void split_seconds(double tot_sec, int& sec, int& ms, int& us, int& ns)
-    {
+    static std::array<int,4> split_seconds(const double tot_sec)
+    {   
+        int sec, ms, us, ns;
         sec = static_cast<int>(tot_sec);
         double frac = tot_sec - sec;
 
@@ -264,6 +175,8 @@ private:
         frac -= us / 1'000'000.0;
 
         ns = static_cast<int>(frac * 1'000'000'000);
+
+        return {sec, ms, us, ns};
     }
 
     static double merge_seconds(const int sec, const int ms, const int us, const int ns)
